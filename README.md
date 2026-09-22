@@ -16,7 +16,7 @@ Atlas provides a focused workspace for uploading PDF documents, asking natural-l
 
 - **Frontend:** React + Vite + custom CSS (no UI framework required)
 - **Backend:** FastAPI + PyMuPDF + LangChain (recursive splitter, Hugging Face embeddings, in-memory vector store)
-- **Generation:** OpenAI, when `OPENAI_API_KEY` is configured; otherwise a source-grounded extractive response
+- **Generation:** Google Gemini, when `GEMINI_API_KEY` is configured; otherwise a source-grounded extractive response
 
 ## Run locally
 
@@ -30,7 +30,7 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-Copy `.env.example` to `.env` and set `OPENAI_API_KEY` if you want generative answers.
+Copy `.env.example` to `.env` and set `GEMINI_API_KEY` if you want generative answers.
 
 ### 2. Frontend
 

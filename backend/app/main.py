@@ -1,6 +1,8 @@
 from __future__ import annotations
 import os
+import time
 import uuid
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -16,6 +18,7 @@ from pydantic import BaseModel, Field
 import fitz
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Atlas RAG API", version="2.0.0")
 app.add_middleware(
@@ -114,37 +117,89 @@ def build_chunks(pages: list[Document], document_id: str) -> list[Document]:
 
 
 def extractive_answer(context: list[tuple[Document, float]]) -> str:
-    lead = context[0][0].page_content
-    if len(lead) > 700:
-        lead = lead[:700].rsplit(" ", 1)[0] + "…"
+    """Fallback handler that shows complete context excerpts without truncating mid-sentence."""
+    if not context:
+        return "No relevant passages were found in the uploaded documents."
+
+    formatted_passages = []
+    for idx, (doc, _) in enumerate(context[:4], start=1):
+        doc_name = doc.metadata.get("document_name", "Document")
+        page_num = doc.metadata.get("page", "?")
+        passage_content = doc.page_content.strip()
+        formatted_passages.append(
+            f"**[Source {idx}: {doc_name} (Page {page_num})]**\n{passage_content}"
+        )
+
+    full_content = "\n\n---\n\n".join(formatted_passages)
     return (
-        "Based on the indexed material, the most relevant information is: "
-        f"{lead}\n\n"
-        "This response is an extractive fallback. Add an `OPENAI_API_KEY` to enable a synthesized answer."
+        f"{full_content}\n\n"
+        "> **Note:** Synthesized response was unavailable; presenting relevant source excerpts instead."
     )
 
 
 def generate_answer(question: str, context: list[tuple[Document, float]]) -> tuple[str, bool]:
-    api_key = os.getenv("OPENAI_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return extractive_answer(context), False
+
     try:
-        from openai import OpenAI
+        from google import genai
+        from google.genai import types
+        from google.genai.errors import APIError
 
         source_text = "\n\n".join(
             f"[Source {index}: {document.metadata['document_name']}, page {document.metadata['page']}]\n{document.page_content}"
             for index, (document, _) in enumerate(context, start=1)
         )
-        result = OpenAI(api_key=api_key).chat.completions.create(
-            model=os.getenv("OPENAI_MODEL", "gpt-4o-mini"),
-            temperature=0.1,
-            messages=[
-                {"role": "system", "content": "Answer only from the supplied sources. If the answer is absent, say so. Be concise and cite sources inline as [Source N]."},
-                {"role": "user", "content": f"Sources:\n{source_text}\n\nQuestion: {question}"},
-            ],
-        )
-        return result.choices[0].message.content or extractive_answer(context), True
-    except Exception:
+
+        prompt = f"""
+You are a helpful PDF assistant.
+
+Answer the user's question using ONLY the information
+provided in the context.
+
+If the answer is not available in the context, say:
+
+"I could not find the answer in the PDF."
+
+Do not make up information.
+
+Context:
+{source_text}
+
+User Question:
+{question}
+"""
+
+        client = genai.Client(api_key=api_key)
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+        # Retry loop for upstream 503 UNAVAILABLE / capacity spikes
+        result = None
+        for attempt in range(3):
+            try:
+                result = client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        temperature=0.1,
+                        max_output_tokens=2048,
+                        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+                    ),
+                )
+                break
+            except APIError as err:
+                if err.code == 503 and attempt < 2:
+                    time.sleep(1.5 * (attempt + 1))
+                    continue
+                raise
+
+        answer = result.text if result else None
+        client.close()
+        return answer or extractive_answer(context), True
+
+    except Exception as exc:
+        logger.warning("Gemini generation failed; using source excerpt instead: %s", exc)
         return extractive_answer(context), False
 
 
