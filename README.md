@@ -12,7 +12,7 @@ Atlas provides a focused workspace for uploading PDF documents, asking natural-l
 
 ![Atlas PDF Knowledge Assistant interface](assets/atlas-interface.png)
 
-## Stack
+## Tech-Stack
 
 - **Frontend:** React + Vite + custom CSS (no UI framework required)
 - **Backend:** FastAPI + PyMuPDF + LangChain (recursive splitter, Hugging Face embeddings, in-memory vector store)
