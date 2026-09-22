@@ -2,6 +2,10 @@
 
 An end-to-end Retrieval-Augmented Generation (RAG) app for asking cited questions about PDF documents.
 
+## Description
+
+Atlas is a powerful, local-first document analysis tool that leverages Retrieval-Augmented Generation (RAG) to help you understand and extract information from your PDF documents. By combining a sleek, modern React frontend with a robust FastAPI and LangChain backend, Atlas processes your uploaded PDFs, chunks them, and stores their semantic embeddings. When you ask a question, it retrieves the most relevant sections and uses an LLM (like OpenAI's models) to generate a precise, context-aware answer, complete with exact source citations from your original documents. It's designed to streamline research, document review, and knowledge extraction.
+
 ## Interface preview
 
 Atlas provides a focused workspace for uploading PDF documents, asking natural-language questions, and reviewing source-grounded responses with page citations.
